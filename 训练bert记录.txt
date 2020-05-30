@@ -1,0 +1,161 @@
+需要准备的数据：
+1. 实体链接 
+input: zhwiki-latest-pages-articles-multistream1.xml-p1p162886
+output: pretrain_data/output/AA/wiki_00
+wiki源数据，python wikiextract.py --links --output pretrain_data/output wikidata....
+(需要有实体链接）
+
+
+中文，如果用cn-dbpedia，则不用保留实体链接。
+注释掉582-589,595行。去掉<doc....> </doc>的输出
+
+python wikiextract.py enwiki-latest-pages-articles.xml.bz2 --output pretrain_data/extract --min_text_length 100 --filter_disambig_pages -it abbr,b,big --processes 4
+
+python3 pretrain_data/WikiExtractor.py enwiki-latest-pages-articles.xml.bz2 -o pretrain_data/extract -l --min_text_length 100 --filter_disambig_pages -it abbr,b,big --processes 4
+
+
+python -m opencc -c t2s -i wikiextractor/text/AA/wiki_00 -o my_traditional_output_file.txt
+或者
+sudo apt-get install opencc
+opencc -c t2s -i extract/AA/wiki_00 -o ../my_traditional_output_file.txt
+cp ../../my_traditional_output_file.txt opencc/AA/wiki_00
+输入：pretrain_data/extract
+输出：pretrain_data/opencc
+
+
+(参考https://github.com/thunlp/ERNIE）
+
+实体链接 
+pip install html5lib   # 非常重要
+rm -rf output/*
+python3 create_entity_linking.py N
+
+或者
+参考tagme的方式，只需要提供实体[名称，起始位置，终止位置，置信度]即可。例如
+[['Q191037', 0, 10, 0.8473327159881592], ['Q2629392', 17, 26, 0.48991236090660095]]
+
+
+（统计得到entity的列表, 在测试小样本时用。大样本时，直接统计cn-dbpedia有多少实体即可
+python statistic_alias_entity.py 4
+input: pretrain_data/entity_occurred/AA/wiki_00
+output: pretrain_data/entity_alias/AA/wiki_00
+
+去重、去空放到alias_entity.txt中
+cat entity_alias/AA/wiki_00 |sort -u|awk -F'\t' '{if($1!="") print $1"\tQ"NR}' > alias_entity.txt
+
+)
+
+2. 规范化表示文本
+输入：pretrain_data/output/AA/wiki_00
+output format: xxxxxxxxxx sepsepsep entity text sepsepsep xxxxxxxxxx[_end_]entity text[_map_]entity[_end_]
+(可能后面还有中文分词的结果[_cutcutcut_]word[_seg_]word[_seg_]......)
+
+python3 extract.py n
+
+结果保存在 pretrain_data/ann/AA/wiki_00
+
+
+3. 符号化表示token   : pre-trained/raw/0_token    pre-trained/raw/0_entity
+下载alias_entity
+wget -c https://cloud.tsinghua.edu.cn/f/a519318708df4dc8a853/?dl=1 -O alias_entity.txt
+下载ernie_base文件夹（pre-trained ERNIE）
+https://cloud.tsinghua.edu.cn/f/8df2a3a6261e4643a68f/
+
+nltk.tokenize 的sent_tokenize 会load包punkt，所以下载
+import nltk
+nltk.download('punkt')
+下载后，存放在 /home/zhuxiangru/nltk_data
+
+
+命令：python3 create_ids.py N
+保存在raw/0_entity   raw/0_token
+原始token: raw/o_raw_token
+
+
+(临时自己构造了一个中文字符集vocab.txt.注意要补充上[MASK][SEP]等符号
+ cat raw/0_raw_token|sort -u > ernie_base/vocab.txt
+ mv raw/0_raw_token ./
+）
+
+得到token和entity的符号化表示：
+sentence_len 1st_sent_token_len token11 token12 token13 ...... 2nd_sent_token_len token21 token22....
+sentence_len 1st_sent_token_len UNK UNK entity13 .....  2nd_sent_token_len UNK entity22 entity22(这两个token是一个entity，例如李娜是两个字) ....
+
+
+（可选）注意，tensorflow配置好gpu  cudann
+
+4. 数值化表示token  保存在 pre-trained/data/0.bin  pre-trained/data/0.idx
+
+cd pre-trained
+
+以下的entity2id.txt和entity2vec.vec其实来自openKE。在文件未准备好或者不方便转存过来的情况下，调试程序时使用自造的假数据。
+cat alias_entity.txt |wc -l > kg_embed/entity2id.txt
+cat alias_entity.txt |awk -F'\t' '{print $2"\t"NR}' >> kg_embed/entity2id.txt
+cat ~/Documents/BERT/ERNIE/pretrain_data/kg_embed/entity2vec.vec |head -4780 |awk -F'\t' '{print $0"\t"$0}' > kg_embed/entity2vec.vec  # 因为自己训练的是200维，而ernie原有entity2vec.vec里是100维。
+(wsl: /mnt/f/PyCharmProgram/ERNIE_zh_multimodal/pretrain_data/kg_embed/entity2vec.vec)
+
+(真实情况上述两个文件来源于OpenKE训练的vec。)
+
+python3 create_insts.py N
+
+注意需要新增的文件是kg_embed/entity2id.txt    
+第一行：行数   第二行之后：Q1 Q2 Q3.。。。。对应的序号，0开头（entity2vec.vec的序号）
+
+bin：保存的是：input_ids + input_mask + segment_ids + masked_lm_labels + entity + entity_mask + [next_sentence_label]
+idx: 保存的是：
+		index = open(index_file, 'wb')
+        index.write(b'TNTIDX\x00\x00')
+        index.write(struct.pack('<Q', 1))
+        index.write(struct.pack('<QQ', code(self.dtype), self.element_size))
+        index.write(struct.pack('<QQ', len(self.data_offsets) - 1, len(self.sizes)))
+        write_longs(index, self.dim_offsets)  // self.dim_offsets 数组
+        write_longs(index, self.data_offsets) // self.data_offsets 数组
+        write_longs(index, self.sizes)        // self.sizes 数组
+        index.close()
+
+5. merge 保存在pre-trained/merge.bin  pre-trained/merge.idx
+把pre-trained/data/中的所有bin中的token（entity等）合并到一个大文件中。（idx保存偏移量offset、size等数值。）
+
+rm pretrain_data/data/*
+cd ..
+python3 code/merge.py
+
+6. train
+
+change: code/run_pretrain.py
+line 279:
+from apex.fp16_utils.fp16_optimizer import FP16_Optimizer
+from apex.optimizers import FusedAdam
+# optimizer = FusedAdam(optimizer_grouped_parameters,
+#                       lr=args.learning_rate,
+#                       bias_correction=False,
+#                       max_grad_norm=1.0)
+optimizer = FusedAdam(optimizer_grouped_parameters,
+                        lr=args.learning_rate,
+                        bias_correction=False)
+
+python3 code/run_pretrain.py --do_train --data_dir pretrain_data/merge --bert_model pretrain_data/ernie_base --output_dir pretrain_out/ --task_name pretrain --fp16 --max_seq_length 256
+注意： --bert_model 的ernie_base在哪个文件夹内。否则找不到。
+
+注意：
+需要新增文件kg_embed/entity2vec.vec （目前是100维）
+
+新增ernie_config.json和pytorch_model.bin
+这两个文件是干啥的？？？？？
+
+目前看bert-chinese的结构和ernie的结构不一样。或者说结构一样，只是config.json不一样。
+!python code/run_pretrain.py --do_train --data_dir pretrain_data/merge --bert_model pretrain_data/bert_chinese --output_dir pretrain_out/ --task_name pretrain --fp16 --max_seq_length 256
+
+如果没有apex,不要用pip install apex和setup.py安装
+pip uninstall apex
+git clone https://www.github.com/nvidia/apex
+cd apex
+pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./
+
+
+1. 改进表示部分。那部分太长了。
+训练ent和image embedding的size有问题。要不然索引的时候比较麻烦。
+问题是：4780个实体，为什么实体索引会到4781，而这样就需要vec有4782个？这都是怎么出来的？
+entity=0也就是label=-1的embedding用什么？用全0吗？
+
+2. 还有，训练时，不需要验证集的acc吗？看一些别的文件怎么做的。
