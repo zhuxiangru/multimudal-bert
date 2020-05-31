@@ -8,16 +8,18 @@ from multiprocessing import Pool
 import html5lib
 
 # input_folder = "pretrain_data/output"
-input_folder = "../pretrain_data/entity_occurred"
-output_folder = "../pretrain_data/entity_alias"
+#input_folder = "../pretrain_data/entity_occurred"
+#output_folder = "../pretrain_data/entity_alias"
 
-file_list = []
-for path, _, filenames in os.walk(input_folder):
-    for filename in filenames:
-        file_list.append(os.path.join(path, filename))
-print ("file_list=%s" % file_list)
+def get_file_list(input_folder):
+    file_list = []
+    for path, _, filenames in os.walk(input_folder):
+        for filename in filenames:
+            file_list.append(os.path.join(path, filename))
+    print ("file_list=%s" % file_list)
+    return file_list
 
-def run_proc(idx, n, file_list):
+def run_proc(idx, n, file_list, input_folder, output_folder):
     for i in range(len(file_list)):
         if i % n == idx:
             input_name = file_list[i]
@@ -40,9 +42,18 @@ def run_proc(idx, n, file_list):
 import sys
 
 if __name__ == '__main__':
+    if len(sys.argv) < 4:
+        print ("Usage: python statistic_alias_entity.py process_num input_folder output_folder")
+        exit(0)
+        
     n = int(sys.argv[1])
+    input_folder = sys.argv[2] + "/"
+    output_folder = sys.argv[3] + "/"
+    
+    file_list = get_file_list(input_folder)
+    
     p = Pool(n)
     for i in range(n):
-        p.apply_async(run_proc, args=(i,n, file_list))
+        p.apply_async(run_proc, args=(i,n, file_list, input_folder, output_folder))
     p.close()
     p.join()

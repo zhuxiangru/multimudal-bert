@@ -175,9 +175,9 @@ def main():
     task_name = args.task_name.lower()
     
     vecs = []
-    vecs.append([0]*200) # CLS
-    #with open("kg_embed/entity2vec.vec", 'r') as fin:
-    with open("pretrain_data/kg_embed/entity2vec.vec", 'r') as fin:
+    vecs.append([0]*200) # 扩充CLS的位置，其他所有索引向后+1.
+    with open("config_data/kg_embed/entity2vec.vec", 'r') as fin:
+    #with open("pretrain_data/config_data/entity2vec.vec", 'r') as fin:
         for line in fin:
             vec = line.strip().split('\t')
             #vec = [float(x) for x in vec if x != ""]
@@ -192,9 +192,9 @@ def main():
     logger.info("Shape of entity embedding: "+str(ent_embed.weight.size()))
 
     vecs = []
-    vecs.append([0] * 4096)  # CLS
-    # with open("image_vec/image2vec.vec", 'r') as fin:
-    with open("pretrain_data/image_vec/image2vec.vec", 'r') as fin:
+    vecs.append([0] * 4096)  # 扩充CLS的位置，其他所有索引向后+1.
+    with open("config_data/kg_embed/image2vec.vec", 'r') as fin:
+    #with open("pretrain_data/image_vec/image2vec.vec", 'r') as fin:
         for line in fin:
             vec = line.strip().split('\t')
             vec = [float(x) for x in vec]

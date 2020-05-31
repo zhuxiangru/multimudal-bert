@@ -11,16 +11,18 @@ import re
 
 # input_folder = "pretrain_data/output"
 # input_folder = "../pretrain_data/opencc"
-input_folder = "../pretrain_data/opencc_simple"
-output_folder = "../pretrain_data/output"
-entity_occurred_folder = "../pretrain_data/entity_occurred"
+#input_folder = "../pretrain_data/opencc_simple"
+#output_folder = "../pretrain_data/output"
+#entity_occurred_folder = "../pretrain_data/entity_occurred"
 MAX_CONTENT_LENGTH = 200
 
-file_list = []
-for path, _, filenames in os.walk(input_folder):
-    for filename in filenames:
-        file_list.append(os.path.join(path, filename))
-print ("file_list=%s" % file_list)
+def get_file_list(input_folder):
+    file_list = []
+    for path, _, filenames in os.walk(input_folder):
+        for filename in filenames:
+            file_list.append(os.path.join(path, filename))
+    print ("file_list=%s" % file_list)
+    return file_list
 
 def entity_linking(text):
     #text = '红楼梦是我国四大名著之一，是小学生的推荐书目。'
@@ -106,7 +108,7 @@ def cut_sentences(sentences, max_content_length = MAX_CONTENT_LENGTH):
     return new_sentence_list
 
 
-def run_proc(idx, n, file_list, display_wordseg = False):
+def run_proc(idx, n, file_list, input_folder, output_folder, entity_occurred_folder, display_wordseg = False):
     for i in range(len(file_list)):
         if i % n == idx:
             input_name = file_list[i]
@@ -222,9 +224,19 @@ def run_proc(idx, n, file_list, display_wordseg = False):
 import sys
 
 if __name__ == '__main__':
+    if len(sys.argv) < 5:
+        print ("Usage: python create_entity_linking.py process_num input_folder output_folder entity_occurred_folder")
+        exit(0)
+        
     n = int(sys.argv[1])
+    input_folder = sys.argv[2] + "/"
+    output_folder = sys.argv[3] + "/"
+    entity_occurred_folder = sys.argv[4] + "/"
+    
+    file_list = get_file_list(input_folder)
+    
     p = Pool(n)
     for i in range(n):
-        p.apply_async(run_proc, args=(i,n, file_list))
+        p.apply_async(run_proc, args=(i,n, file_list, input_folder, output_folder, entity_occurred_folder))
     p.close()
     p.join()

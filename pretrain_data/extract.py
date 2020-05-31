@@ -5,16 +5,18 @@ import os
 from multiprocessing import Pool
 
 # input_folder = "pretrain_data/output_2"
-input_folder = "../pretrain_data/output"
-output_folder = "../pretrain_data/ann"
+#input_folder = "../pretrain_data/output"
+#output_folder = "../pretrain_data/ann"
 
-file_list = []
-for path, _, filenames in os.walk(input_folder):
-    for filename in filenames:
-        file_list.append(os.path.join(path, filename))
-print (file_list)
+def get_file_list(input_folder):
+    file_list = []
+    for path, _, filenames in os.walk(input_folder):
+        for filename in filenames:
+            file_list.append(os.path.join(path, filename))
+    print (file_list)
+    return file_list
 
-def run_proc(idx, n, file_list):
+def run_proc(idx, n, file_list, input_folder, output_folder):
     for i in range(len(file_list)):
         if i % n == idx:
             input_name = file_list[i]
@@ -57,9 +59,19 @@ def run_proc(idx, n, file_list):
 
 import sys
 
-n = int(sys.argv[1])
-p = Pool(n)
-for i in range(n):
-    p.apply_async(run_proc, args=(i,n, file_list))
-p.close()
-p.join()
+if __name__ == '__main__':
+    if len(sys.argv) < 4:
+        print ("Usage: python statistic_alias_entity.py process_num input_folder output_folder")
+        exit(0)
+        
+    n = int(sys.argv[1])
+    input_folder = sys.argv[2] + "/"
+    output_folder = sys.argv[3] + "/"
+    
+    file_list = get_file_list(input_folder)
+
+    p = Pool(n)
+    for i in range(n):
+        p.apply_async(run_proc, args=(i,n, file_list, input_folder, output_folder))
+    p.close()
+    p.join()

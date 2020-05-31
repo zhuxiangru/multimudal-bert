@@ -5,12 +5,12 @@ from multiprocessing import Pool
 #from nltk.tokenize import sent_tokenize
 import math
 
-vocab_file = "ernie_base/vocab.txt"
-entity_map_file = "alias_entity.txt"
-image_map_file = "alias_image.txt"
+#vocab_file = "ernie_base/vocab.txt"
+#entity_map_file = "alias_entity.txt"
+#image_map_file = "alias_image.txt"
+#input_folder = "../pretrain_data/ann"
+#output_folder = "../pretrain_data/raw"
 do_lower_case = True
-input_folder = "../pretrain_data/ann"
-output_folder = "../pretrain_data/raw"
 
 # 用于分句子
 # 版本为python3，如果为python2需要在字符串前面加上u
@@ -27,50 +27,55 @@ def cut_sentence(para):
     # 很多规则中会考虑分号;，但是这里我把它忽略不计，破折号、英文双引号等同样忽略，需要的再做些简单调整即可。
     return para.split("\n")
 
-tokenizer = tokenization.FullTokenizer(
-      vocab_file=vocab_file, do_lower_case=do_lower_case)
+def get_tokenizer(vocab_file, do_lower_case = do_lower_case):
+    tokenizer = tokenization.FullTokenizer(
+        vocab_file=vocab_file, do_lower_case=do_lower_case)
+    return tokenizer
 
-file_list = []
-for path, _, filenames in os.walk(input_folder):
-    for filename in filenames:
-        file_list.append(os.path.join(path, filename))
+def get_file_list(input_folder):
+    file_list = []
+    for path, _, filenames in os.walk(input_folder):
+        for filename in filenames:
+            file_list.append(os.path.join(path, filename))
 
-part = int(math.ceil(len(file_list) / 20.))
-file_list = [file_list[i:i+part] for i in range(0, len(file_list), part)]
-
-sep_id = tokenizer.convert_tokens_to_ids(["sepsepsep"])[0]
+    part = int(math.ceil(len(file_list) / 20.))
+    file_list = [file_list[i:i+part] for i in range(0, len(file_list), part)]
+    return file_list
 
 # load entity dict
-d_ent = {}
-with open(entity_map_file, "r") as fin:
-    for line in fin:
-        line_list = line.strip().split("\t")
-        if len(line_list) != 2:
-            continue
-        d_ent[line_list[0]] = line_list[1]
+def get_entity_dict(entity_map_file):
+    d_ent = {}
+    with open(entity_map_file, "r") as fin:
+        for line in fin:
+            line_list = line.strip().split("\t")
+            if len(line_list) != 2:
+                continue
+            d_ent[line_list[0]] = line_list[1]
+    return d_ent
 
 # load image dict
-d_image = {}
-with open(image_map_file, "r") as fin:
-    for line in fin:
-        line_list = line.strip().split("\t")
-        if len(line_list) != 2:
-            continue
-        d_image[line_list[0]] = line_list[1]
+def get_image_dict(image_map_file):
+    d_image = {}
+    with open(image_map_file, "r") as fin:
+        for line in fin:
+            line_list = line.strip().split("\t")
+            if len(line_list) != 2:
+                continue
+            d_image[line_list[0]] = line_list[1]
+    return d_image
 
-
-def run_proc(idx, n, file_list):
-    folder = output_folder
+def run_proc(idx, n, file_list, input_folder, output_folder, tokenizer, d_ent, d_image):
     for i in range(len(file_list)):
         if i % n == idx:
-            target = "{}/{}".format(folder, i)
+            target = "{}/{}".format(output_folder, i)
             fout_text = open(target+"_token", "w")
             fout_ent = open(target+"_entity", "w")
             fout_img = open(target+"_image", "w")
-            fout_raw_token = open(target+"_raw_token", "w")
+            #fout_raw_token = open(target+"_raw_token", "w")
             input_names = file_list[i]
 
-            fout_raw_token.write("[PAD]\n[unused0]\n[unused1]\n[UNK]\n[CLS]\n[SEP]\n[MASK]\n")
+            #fout_raw_token.write("[PAD]\n[unused0]\n[unused1]\n[UNK]\n[CLS]\n[SEP]\n[MASK]\n")
+            sep_id = tokenizer.convert_tokens_to_ids(["sepsepsep"])[0]
             for input_name in input_names:
                 print(input_name)
                 fin = open(input_name, "r")
@@ -130,7 +135,7 @@ def run_proc(idx, n, file_list):
                         new_img_out = []
 
                         print("tokens=%s" % tokens)
-                        fout_raw_token.write("%s\n" % "\n".join(tokens))
+                        #fout_raw_token.write("%s\n" % "\n".join(tokens))
                         for token in tokenizer.convert_tokens_to_ids(tokens):
                             if token != sep_id:
                                 new_text_out.append(token)
@@ -162,15 +167,32 @@ def run_proc(idx, n, file_list):
                 fin.close()
             fout_ent.close()
             fout_text.close()
-            fout_raw_token.close()
+            #fout_raw_token.close()
 
-folder = output_folder
-if not os.path.exists(folder):
-    os.makedirs(folder)
+if __name__ == "__main__":
+    if len(sys.argv) < 7:
+        print ("Usage: python3 create_ids.py process_num input_folder output_folder vocab_file entity_map_file image_map_file")
+        exit(0)
+        
+    n = int(sys.argv[1])
+    input_folder = sys.argv[2] + "/"
+    output_folder = sys.argv[3] + "/"
+    vocab_file = sys.argv[4]
+    entity_map_file = sys.argv[5]
+    image_map_file = sys.argv[6]
+    
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+    
+    file_list = get_file_list(input_folder)
+    tokenizer = get_tokenizer(vocab_file)
+    d_ent = get_entity_dict(entity_map_file)
+    d_image = get_image_dict(image_map_file)
+        
+    p = Pool(n)
+    for i in range(n):
+        p.apply_async(run_proc, args=(i,n, file_list, input_folder, output_folder, tokenizer, d_ent, d_image))
+    p.close()
+    p.join()
 
-n = int(sys.argv[1])
-p = Pool(n)
-for i in range(n):
-    p.apply_async(run_proc, args=(i,n, file_list))
-p.close()
-p.join()
+
