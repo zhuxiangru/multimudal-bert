@@ -157,5 +157,7 @@ pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cud
 训练ent和image embedding的size有问题。要不然索引的时候比较麻烦。
 问题是：4780个实体，为什么实体索引会到4781，而这样就需要vec有4782个？这都是怎么出来的？
 entity=0也就是label=-1的embedding用什么？用全0吗？
+已解决
 
 2. 还有，训练时，不需要验证集的acc吗？看一些别的文件怎么做的。
+不需要。只用设置单独的eval的run即可。
