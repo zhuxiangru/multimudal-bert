@@ -199,6 +199,8 @@ def main():
             vec = line.strip().split('\t')
             vec = [float(x) for x in vec]
             vecs.append(vec)
+    print("vecs_len=%s" % str(len(vecs)))
+    print("vecs_dim=%s" % str(len(vecs[0])))
     img_embed = torch.FloatTensor(vecs)
     img_embed = torch.nn.Embedding.from_pretrained(img_embed)
 
@@ -409,7 +411,7 @@ def main():
             nb_tr_examples, nb_tr_steps = 0, 0
             for step, batch in enumerate(tqdm(train_iterator.next_epoch_itr(), desc="Iteration")):
                 print ("step=%s" % str(step))
-                print ("batch.size=%s" % len(batch.size))
+                print ("len(batch)=%s" % str(len(batch)))
                 batch = tuple(t.to(device) for t in batch)
 
                 input_ids, input_mask, segment_ids, masked_lm_labels, input_ent, ent_mask, input_img, img_mask, next_sentence_label, ent_candidate, ent_labels, img_candidate, img_labels = batch
